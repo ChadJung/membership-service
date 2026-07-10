@@ -15,7 +15,7 @@ spring:
     property-naming-strategy: SNAKE_CASE
 
 server:
-  port: 8080
+  port: 8000
 
 management:
   endpoints:

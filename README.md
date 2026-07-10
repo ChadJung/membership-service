@@ -122,7 +122,7 @@ Base path: `/api/v1` · 모든 응답은 `ApiResponse` 래퍼 + JSON 필드는 `
 
 ```bash
 ./gradlew bootRun
-# → http://localhost:8080, H2 콘솔: http://localhost:8080/h2-console
+# → http://localhost:8000, H2 콘솔: http://localhost:8000/h2-console
 ```
 
 ### 2. 운영 프로파일 (MySQL/Redis/Kafka)
@@ -138,7 +138,7 @@ SPRING_PROFILES_ACTIVE=prod ./gradlew bootRun
 
 | 서비스 | 포트 |
 |---|---|
-| Application | 8080 |
+| Application | 8000 |
 | MySQL | 3306 |
 | Redis | 6379 |
 | Kafka | 9092 |
