@@ -27,5 +27,5 @@ spring:
 
 logging:
   level:
-    com.baemin: DEBUG
+    com.domain: DEBUG
     org.hibernate.SQL: DEBUG

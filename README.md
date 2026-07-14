@@ -150,7 +150,7 @@ SPRING_PROFILES_ACTIVE=prod ./gradlew bootRun
 ```bash
 ./gradlew build -x test     # 빌드 (테스트 제외)
 ./gradlew test              # 전체 테스트
-./gradlew test --tests "com.baemin.membership.domain.member.service.MemberServiceTest"  # 단일 클래스
+./gradlew test --tests "com.domain.membership.domain.member.service.MemberServiceTest"  # 단일 클래스
 ```
 
 ---

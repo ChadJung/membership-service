@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Baemin membership subscription service — a Spring Boot application managing membership lifecycle (subscribe, cancel, renew), recurring payments, and grade-based benefits. Korean-language domain; log messages and error messages are in Korean.
+Membership subscription service — a Spring Boot application managing membership lifecycle (subscribe, cancel, renew), recurring payments, and grade-based benefits. Korean-language domain; log messages and error messages are in Korean.
 
-Context: portfolio / mock project for a 우아한형제들(Woowa Brothers) growth-product job posting.
+Context: portfolio / mock project.
 
 ## Build & Run Commands
 
@@ -23,10 +23,10 @@ Context: portfolio / mock project for a 우아한형제들(Woowa Brothers) growt
 ./gradlew test
 
 # Run a single test class
-./gradlew test --tests "com.baemin.membership.domain.member.service.MemberServiceTest"
+./gradlew test --tests "com.domain.membership.domain.member.service.MemberServiceTest"
 
 # Run a single test method
-./gradlew test --tests "com.baemin.membership.domain.member.service.MemberServiceTest.subscribe_success"
+./gradlew test --tests "com.domain.membership.domain.member.service.MemberServiceTest.subscribe_success"
 
 # Start the application (local profile uses H2 in-memory DB)
 ./gradlew bootRun
@@ -38,7 +38,7 @@ docker-compose up -d
 ## Architecture
 
 - **Java 17, Spring Boot 3.2, Gradle (Kotlin DSL)**
-- **Package structure**: `com.baemin.membership` with domain-driven layout
+- **Package structure**: `com.domain.membership` with domain-driven layout
   - `domain/{member,payment,benefit}/` — each has `controller`, `dto`, `entity`, `repository`, `service` layers
   - `global/` — cross-cutting: config, events, exceptions, response wrapper, schedulers
 
