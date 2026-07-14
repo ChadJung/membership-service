@@ -35,7 +35,7 @@ class BenefitServiceTest {
 
     @BeforeEach
     void setUp() {
-        benefitService = new BenefitService(benefitRepository, memberRepository);
+        benefitService = new BenefitService(memberRepository, new BenefitReader(benefitRepository));
     }
 
     @Test
