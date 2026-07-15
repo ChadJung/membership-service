@@ -8,6 +8,7 @@ import com.domain.membership.domain.member.entity.Member;
 import com.domain.membership.domain.member.entity.MembershipGrade;
 import com.domain.membership.domain.member.entity.MembershipStatus;
 import com.domain.membership.domain.member.repository.MemberRepository;
+import com.domain.membership.domain.member.service.MemberReader;
 import com.domain.membership.global.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,7 +36,7 @@ class BenefitServiceTest {
 
     @BeforeEach
     void setUp() {
-        benefitService = new BenefitService(memberRepository, new BenefitReader(benefitRepository));
+        benefitService = new BenefitService(new MemberReader(memberRepository), new BenefitReader(benefitRepository));
     }
 
     @Test

@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ public class MemberService {
     private final MeterRegistry meterRegistry;
 
     @Transactional
+    @CacheEvict(value = "members", key = "#request.userId()")
     public MemberResponse subscribe(MemberSubscribeRequest request) {
         if (memberRepository.existsByUserIdAndStatus(request.userId(), MembershipStatus.ACTIVE)) {
             throw new BusinessException(ErrorCode.ALREADY_SUBSCRIBED);
@@ -51,6 +53,7 @@ public class MemberService {
     }
 
     @Transactional
+    @CacheEvict(value = "members", key = "#userId")
     public MemberResponse cancel(Long userId) {
         Member member = memberRepository.findByUserIdAndStatus(userId, MembershipStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBERSHIP_NOT_FOUND));

@@ -1,11 +1,8 @@
 package com.domain.membership.domain.benefit.service;
 
 import com.domain.membership.domain.benefit.dto.BenefitResponse;
-import com.domain.membership.domain.member.entity.Member;
-import com.domain.membership.domain.member.entity.MembershipStatus;
-import com.domain.membership.domain.member.repository.MemberRepository;
-import com.domain.membership.global.exception.BusinessException;
-import com.domain.membership.global.exception.ErrorCode;
+import com.domain.membership.domain.member.dto.MemberResponse;
+import com.domain.membership.domain.member.service.MemberReader;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,15 +16,13 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class BenefitService {
 
-    private final MemberRepository memberRepository;
+    private final MemberReader memberReader;
     private final BenefitReader benefitReader;
 
     public List<BenefitResponse> getAvailableBenefits(Long userId) {
-        // Membership validation stays outside the cache so ACTIVE status and
-        // the member's current grade are always checked against the DB.
-        Member member = memberRepository.findByUserIdAndStatus(userId, MembershipStatus.ACTIVE)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBERSHIP_NOT_FOUND));
-
-        return benefitReader.getActiveBenefits(member.getGrade());
+        // Both lookups are cached: the membership snapshot briefly (60s TTL,
+        // evicted on every state change) and the grade's benefit list longer.
+        MemberResponse member = memberReader.getActiveMember(userId);
+        return benefitReader.getActiveBenefits(member.grade());
     }
 }

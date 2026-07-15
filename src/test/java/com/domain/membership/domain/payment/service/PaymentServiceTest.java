@@ -4,6 +4,7 @@ import com.domain.membership.domain.member.entity.Member;
 import com.domain.membership.domain.member.entity.MembershipGrade;
 import com.domain.membership.domain.member.entity.MembershipStatus;
 import com.domain.membership.domain.member.repository.MemberRepository;
+import com.domain.membership.domain.member.service.MemberReader;
 import com.domain.membership.domain.payment.dto.PaymentRequest;
 import com.domain.membership.domain.payment.dto.PaymentResponse;
 import com.domain.membership.domain.payment.entity.Payment;
@@ -46,7 +47,7 @@ class PaymentServiceTest {
 
     @BeforeEach
     void setUp() {
-        paymentService = new PaymentService(paymentRepository, memberRepository, eventPublisher);
+        paymentService = new PaymentService(paymentRepository, memberRepository, new MemberReader(memberRepository), eventPublisher);
     }
 
     @Test

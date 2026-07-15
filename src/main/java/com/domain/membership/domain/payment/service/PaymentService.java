@@ -3,6 +3,7 @@ package com.domain.membership.domain.payment.service;
 import com.domain.membership.domain.member.entity.Member;
 import com.domain.membership.domain.member.entity.MembershipStatus;
 import com.domain.membership.domain.member.repository.MemberRepository;
+import com.domain.membership.domain.member.service.MemberReader;
 import com.domain.membership.domain.payment.dto.PaymentRequest;
 import com.domain.membership.domain.payment.dto.PaymentResponse;
 import com.domain.membership.domain.payment.entity.Payment;
@@ -13,6 +14,7 @@ import com.domain.membership.global.exception.BusinessException;
 import com.domain.membership.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,9 +30,14 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final MemberRepository memberRepository;
+    private final MemberReader memberReader;
     private final ApplicationEventPublisher eventPublisher;
 
+    // Evicts the membership snapshot because renew() moves expiredAt.
+    // The authorization lookup below stays on the DB (not MemberReader):
+    // billing must never trust a cached ACTIVE status.
     @Transactional
+    @CacheEvict(value = "members", key = "#request.userId()")
     public PaymentResponse processPayment(PaymentRequest request) {
         Member member = memberRepository.findByUserIdAndStatus(request.userId(), MembershipStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBERSHIP_NOT_FOUND));
@@ -94,6 +101,7 @@ public class PaymentService {
                 paymentRepository.save(renewal);
 
                 member.renew();
+                memberReader.evictMember(member.getUserId());
                 log.info("정기결제 갱신 완료: memberId={}", member.getId());
             } catch (Exception e) {
                 log.error("정기결제 갱신 실패: memberId={}", lastPayment.getMemberId(), e);
