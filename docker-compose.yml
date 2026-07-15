@@ -102,6 +102,7 @@ services:
       kafka:
         condition: service_healthy
     environment:
+      TZ: Asia/Seoul
       SPRING_PROFILES_ACTIVE: prod
       DB_HOST: mysql
       DB_USERNAME: root
@@ -123,6 +124,7 @@ services:
       kafka:
         condition: service_healthy
     environment:
+      TZ: Asia/Seoul
       SPRING_PROFILES_ACTIVE: prod
       DB_HOST: mysql
       DB_USERNAME: root
@@ -147,6 +149,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      TZ: Asia/Seoul
       SPRING_PROFILES_ACTIVE: prod
       DB_HOST: mysql
       DB_USERNAME: root
@@ -169,6 +172,7 @@ services:
       - payment-service
       - benefit-service
     environment:
+      TZ: Asia/Seoul
       MEMBER_SERVICE_URL: http://member-service:8081
       PAYMENT_SERVICE_URL: http://payment-service:8082
       BENEFIT_SERVICE_URL: http://benefit-service:8083

@@ -150,10 +150,10 @@ $('btnPay').addEventListener('click', async () => {
     pulse('kafka');
     log('kafka', `payment-events ← COMPLETED ${KRW(p.amount)} (member-service가 만료일을 갱신합니다)`);
     // Renewal is eventually consistent: re-read the membership after the
-    // event has had time to travel payment → kafka → member.
+    // event has had time to travel payment → kafka → member (~2-4s observed).
     setTimeout(async () => {
       log('member', '이벤트 반영 확인을 위해 멤버십을 다시 조회합니다');
       await lookup();
-    }, 1500);
+    }, 3000);
   } catch { /* logged */ }
 });
