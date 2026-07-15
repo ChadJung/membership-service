@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>멤버십 구독 콘솔</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark"></span>
+    <h1>멤버십 구독 콘솔</h1>
+    <span class="brand-sub">event-driven microservices demo</span>
+  </div>
+  <div class="archmap" aria-label="서비스 아키텍처 상태">
+    <span class="node" id="node-gateway">gateway<em>:8000</em></span>
+    <span class="pipe"></span>
+    <span class="node" id="node-member">member<em>:8081</em></span>
+    <span class="node" id="node-payment">payment<em>:8082</em></span>
+    <span class="node" id="node-benefit">benefit<em>:8083</em></span>
+    <span class="pipe"></span>
+    <span class="node node-kafka" id="node-kafka">kafka</span>
+  </div>
+</header>
+
+<main class="grid">
+
+  <section class="card panel-user">
+    <h2>사용자</h2>
+    <label for="userId">사용자 ID</label>
+    <div class="row">
+      <input id="userId" type="number" value="1001" min="1">
+      <button class="btn" id="btnLookup">멤버십 조회</button>
+    </div>
+
+    <div class="subscribe-box">
+      <label for="grade">가입 등급</label>
+      <div class="row">
+        <select id="grade">
+          <option value="BASIC">BASIC — 월 2,990원</option>
+          <option value="PREMIUM">PREMIUM — 월 7,900원</option>
+        </select>
+        <button class="btn btn-primary" id="btnSubscribe">멤버십 가입</button>
+      </div>
+    </div>
+
+    <div id="membershipCard" class="membership-card empty">
+      <p class="empty-note">사용자 ID를 입력하고 멤버십을 조회하세요.</p>
+    </div>
+
+    <button class="btn btn-danger" id="btnCancel" disabled>멤버십 해지</button>
+  </section>
+
+  <section class="card panel-benefits">
+    <h2>혜택 <span class="owner-tag tag-benefit">benefit-service</span></h2>
+    <button class="btn" id="btnBenefits">혜택 조회</button>
+    <ul id="benefitList" class="benefit-list">
+      <li class="empty-note">활성 멤버십의 등급별 혜택이 여기 표시됩니다.</li>
+    </ul>
+  </section>
+
+  <section class="card panel-payments">
+    <h2>결제 <span class="owner-tag tag-payment">payment-service</span></h2>
+    <button class="btn btn-primary" id="btnPay">월 요금 결제</button>
+    <p class="hint">결제 완료 → Kafka <code>payment-events</code> → member-service가 만료일을 갱신합니다.</p>
+    <button class="btn" id="btnHistory">결제 이력 조회</button>
+    <table class="history" id="historyTable">
+      <thead><tr><th>결제일</th><th>금액</th><th>수단</th><th>상태</th></tr></thead>
+      <tbody><tr><td colspan="4" class="empty-note">결제 이력이 여기 표시됩니다.</td></tr></tbody>
+    </table>
+  </section>
+
+</main>
+
+<section class="logpanel">
+  <h2>요청 · 이벤트 로그</h2>
+  <ol id="log" class="log" reversed></ol>
+</section>
+
+<script src="app.js"></script>
+</body>
+</html>

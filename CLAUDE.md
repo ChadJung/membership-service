@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Membership subscription service — a Spring Boot application managing membership lifecycle (subscribe, cancel, renew), recurring payments, and grade-based benefits. Korean-language domain; log messages and error messages are in Korean.
+Membership subscription service — an event-driven microservices project managing membership lifecycle (subscribe, cancel, renew), recurring payments, and grade-based benefits. Korean-language domain; log messages and error messages are in Korean.
 
 Context: portfolio / mock project.
 
@@ -16,66 +16,56 @@ Context: portfolio / mock project.
 ```bash
 # All commands run from the project root (this directory).
 
-# Build (skip tests)
+# Build all modules (skip tests)
 ./gradlew build -x test
 
-# Run tests
+# Run all tests / one module's tests / a single class
 ./gradlew test
+./gradlew :member-service:test
+./gradlew :member-service:test --tests "com.domain.membership.member.service.MemberServiceTest"
 
-# Run a single test class
-./gradlew test --tests "com.domain.membership.domain.member.service.MemberServiceTest"
+# Run one service locally (local profile = H2, no infra needed)
+./gradlew :member-service:bootRun
 
-# Run a single test method
-./gradlew test --tests "com.domain.membership.domain.member.service.MemberServiceTest.subscribe_success"
-
-# Start the application (local profile uses H2 in-memory DB)
-./gradlew bootRun
-
-# Start infrastructure (MySQL, Redis, Kafka, Prometheus, Grafana)
-docker-compose up -d
+# Full stack: 4 service containers + MySQL, Redis, Kafka, Prometheus, Grafana
+docker-compose up -d --build
+# Demo SPA + gateway: http://localhost:8000
 ```
 
 ## Architecture
 
-- **Java 17, Spring Boot 3.2, Gradle (Kotlin DSL)**
-- **Package structure**: `com.domain.membership` with domain-driven layout
-  - `domain/{member,payment,benefit}/` — each has `controller`, `dto`, `entity`, `repository`, `service` layers
-  - `global/` — cross-cutting: config, events, exceptions, response wrapper, schedulers
+**Gradle multi-module MSA** (Java 17, Spring Boot 3.2, Kotlin DSL):
 
-### Key Domain Flows
+- `common/` — shared contracts only: `ApiResponse`, `ErrorCode`/`BusinessException`/`GlobalExceptionHandler`, `MembershipGrade`/`MembershipStatus` enums, Kafka event records (`MembershipEvent`, `PaymentEvent`), `MemberSnapshot` (internal API DTO). No entities, no Spring Boot app.
+- `member-service/` (8081, member_db) — owns member state. Public API `/api/v1/memberships/**`, internal API `/internal/members/{userId}`, `/{userId}/active`, `/by-id/{memberId}`. Publishes `membership-events`; consumes `payment-events` (COMPLETED → `member.renew()`), which is the ONLY path that extends expiredAt.
+- `payment-service/` (8082, payment_db) — payments + renewal scheduler (cron `0 0 6 * * *`). Validates members via live REST (`MemberClient`, never cached — billing must not trust stale ACTIVE). Publishes `payment-events`. Fee always from `MembershipGrade.getMonthlyFee()` (BASIC 2990 / PREMIUM 7900), never from the request.
+- `benefit-service/` (8083, benefit_db, Redis) — benefits by grade. `MemberClient` caches member snapshots in Redis (`members::{userId}`, 60s TTL) and `MembershipEventConsumer` evicts on subscribe/cancel events. `BenefitReader` caches benefit lists per grade (30m TTL). RedisConfig uses a JavaTimeModule-aware ObjectMapper (cached DTOs carry LocalDateTime) and caches must round-trip through `GenericJackson2JsonRedisSerializer` — return `ArrayList`, never `Stream.toList()` results, and don't cache empty lists.
+- `api-gateway/` (8000) — Spring Cloud Gateway routing `/api/v1/{memberships,payments,benefits}/**` to the services; serves the demo SPA from `src/main/resources/static/`.
 
-- **Subscribe**: `MemberController` → `MemberService.subscribe()` → publishes `MembershipEvent` → `KafkaEventPublisher` sends to `membership-events` topic
-- **Payment**: `PaymentController` → `PaymentService.processPayment()` → publishes `PaymentEvent` → Kafka `payment-events` topic
-- **Scheduled renewals**: `PaymentScheduler` (cron `0 0 6 * * *`, daily 06:00) triggers `PaymentService.processScheduledRenewals()`, which finds `COMPLETED` payments whose `nextPaymentDate <= now` and bills each. Per-item failures are caught and logged so the loop continues — there is no retry or dead-letter handling.
+Cross-service package roots: `com.domain.membership.{common,member,payment,benefit,gateway}`. Services depend only on `:common`, never on each other's modules — runtime coupling is REST + Kafka only.
+
+### Event Flow
+
+Spring `ApplicationEventPublisher` in-process, then per-service `KafkaEventPublisher` (`@Async @EventListener`) bridges to Kafka as JSON (SNAKE_CASE). Consumers deserialize with the Boot ObjectMapper — keep publisher/consumer Jackson config symmetric. `PaymentEvent` must carry `memberId` (member aggregate id) for the renewal consumer.
+
+### Sample Data
+
+Each service seeds when its table is empty: members userId 1001-1010 (odd BASIC / even PREMIUM, 1009-1010 cancelled), payments for memberId 1-8, five benefits. payment-service's seed assumes member ids 1-10 from a fresh member_db.
 
 ### Domain Model Conventions
 
-- **Rich entities, anemic DTOs**: business logic lives on JPA entities — `Member.cancel/renew/upgradeGrade`, `Payment.complete/fail`. Entities use a `@Builder` + protected no-arg constructor (no public setters); mutate via these domain methods. DTOs are Java `record`s (`request.userId()` accessor style).
-- **Billing cycle**: 1 month. Subscribe and `renew()` set `expiredAt` to `now + 1 month`; payment amount comes from `MembershipGrade.getMonthlyFee()` (BASIC 2990, PREMIUM 7900 KRW), never from the client request.
-- **Active-membership invariant**: subscribe rejects an existing `ACTIVE` membership; payment/cancel require an `ACTIVE` membership keyed by `userId`.
+- Rich entities (`Member.cancel/renew`, `Payment.complete/fail`), `@Builder` + protected no-arg constructor, no setters. DTOs are Java `record`s.
+- Active-membership invariant: subscribe rejects an existing ACTIVE membership; payment/cancel/benefits require ACTIVE, keyed by `userId`.
+- Jackson SNAKE_CASE globally; `BusinessException` + `ErrorCode` (`MEMBER_`/`PAYMENT_`/`BENEFIT_`/`COMMON_` prefixes) → `ApiResponse` wrapper via common's `GlobalExceptionHandler` (picked up by `scanBasePackages = "com.domain.membership"`).
 
-### Event System
+### Profiles
 
-Spring `ApplicationEventPublisher` internally, then `KafkaEventPublisher` (`@Async @EventListener`) bridges to Kafka topics (`membership-events`, `payment-events`).
-
-### Profiles & Data
-
-- `local` (default): H2 in-memory with `ddl-auto: create-drop`, no external infra needed for basic dev
-- `prod`: MySQL 8, requires running docker-compose services
-- Jackson uses `SNAKE_CASE` naming globally
-- JPA `open-in-view: false`, batch fetch size 100
-
-### Error Handling
-
-`BusinessException` + `ErrorCode` enum → `GlobalExceptionHandler` returns `ApiResponse` wrapper. Error codes are prefixed by domain: `MEMBER_`, `PAYMENT_`, `BENEFIT_`, `COMMON_`.
-
-### Monitoring
-
-Actuator exposes `/health`, `/info`, `/prometheus`, `/metrics`. Custom Micrometer counters for subscribe/cancel events. Prometheus + Grafana in docker-compose.
+- `local` (default): per-service H2 in-memory, `ddl-auto: create-drop`
+- `prod`: MySQL 8 database-per-service (member_db/payment_db/benefit_db in one container), `ddl-auto: update`; docker-compose passes env (DB_HOST, KAFKA_BOOTSTRAP_SERVERS=kafka:29092 internal listener, MEMBER_SERVICE_URL, REDIS_HOST)
 
 ## Testing Conventions
 
-- Unit tests use Mockito (`@ExtendWith(MockitoExtension.class)`) with BDDMockito style (`given`/`willReturn`)
-- Assertions use AssertJ (`assertThat`)
-- Test names use `@DisplayName` in Korean describing the scenario
-- Tests use `SimpleMeterRegistry` as a stand-in for Micrometer
+- Unit tests: Mockito (`@ExtendWith(MockitoExtension.class)`), BDDMockito (`given`/`willReturn`), AssertJ, Korean `@DisplayName`
+- Cross-service dependencies are mocked at the client boundary (`MemberClient`), not the repository
+- member-service has one `@SpringBootTest` + MockMvc + `@EmbeddedKafka` integration test (`MemberControllerTest`)
+- Full-stack verification is manual: `docker-compose up --build`, then exercise flows through the gateway (subscribe → benefits → payment → renewal-via-Kafka → cancel)

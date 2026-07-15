@@ -1,52 +1,43 @@
 plugins {
     java
-    id("org.springframework.boot") version "3.2.3"
-    id("io.spring.dependency-management") version "1.1.4"
+    id("org.springframework.boot") version "3.2.3" apply false
+    id("io.spring.dependency-management") version "1.1.4" apply false
 }
 
-group = "com.domain"
-version = "0.0.1-SNAPSHOT"
+allprojects {
+    group = "com.domain"
+    version = "0.0.1-SNAPSHOT"
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
+    repositories {
+        mavenCentral()
+    }
 }
 
-repositories {
-    mavenCentral()
-}
+subprojects {
+    apply(plugin = "java")
+    apply(plugin = "io.spring.dependency-management")
 
-dependencies {
-    // Spring Boot
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-data-redis")
-    implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-
-    // Kafka
-    implementation("org.springframework.kafka:spring-kafka")
-
-    // Database
-    runtimeOnly("com.mysql:mysql-connector-j")
-    runtimeOnly("com.h2database:h2")
-
-    // Redis (embedded for test)
-    testImplementation("it.ozimov:embedded-redis:0.7.3") {
-        exclude(group = "org.slf4j", module = "slf4j-simple")
+    java {
+        sourceCompatibility = JavaVersion.VERSION_17
     }
 
-    // Monitoring
-    implementation("io.micrometer:micrometer-registry-prometheus")
+    the<io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension>().apply {
+        imports {
+            mavenBom(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
+        }
+    }
 
-    // Lombok
-    compileOnly("org.projectlombok:lombok")
-    annotationProcessor("org.projectlombok:lombok")
+    dependencies {
+        "compileOnly"("org.projectlombok:lombok")
+        "annotationProcessor"("org.projectlombok:lombok")
+        "testImplementation"("org.springframework.boot:spring-boot-starter-test")
+    }
 
-    // Test
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("org.springframework.kafka:spring-kafka-test")
-}
+    tasks.withType<JavaCompile> {
+        options.encoding = "UTF-8"
+    }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
+    tasks.withType<Test> {
+        useJUnitPlatform()
+    }
 }

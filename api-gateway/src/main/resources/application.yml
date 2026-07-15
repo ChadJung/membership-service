@@ -1,0 +1,28 @@
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: member-service
+          uri: ${MEMBER_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/memberships/**
+        - id: payment-service
+          uri: ${PAYMENT_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/payments/**
+        - id: benefit-service
+          uri: ${BENEFIT_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/benefits/**
+
+server:
+  port: 8000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,gateway
+  metrics:
+    tags:
+      application: api-gateway

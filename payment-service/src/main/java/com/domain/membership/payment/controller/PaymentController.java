@@ -1,0 +1,31 @@
+package com.domain.membership.payment.controller;
+
+import com.domain.membership.payment.dto.PaymentRequest;
+import com.domain.membership.payment.dto.PaymentResponse;
+import com.domain.membership.payment.service.PaymentService;
+import com.domain.membership.common.response.ApiResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/payments")
+@RequiredArgsConstructor
+public class PaymentController {
+
+    private final PaymentService paymentService;
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<PaymentResponse> processPayment(@RequestBody @Valid PaymentRequest request) {
+        return ApiResponse.success(paymentService.processPayment(request));
+    }
+
+    @GetMapping("/{userId}")
+    public ApiResponse<List<PaymentResponse>> getPaymentHistory(@PathVariable Long userId) {
+        return ApiResponse.success(paymentService.getPaymentHistory(userId));
+    }
+}
