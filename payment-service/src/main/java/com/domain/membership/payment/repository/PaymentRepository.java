@@ -16,6 +16,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByTransactionId(String transactionId);
 
+    Optional<Payment> findByIdempotencyKey(String idempotencyKey);
+
+    boolean existsByMemberIdAndStatusAndNextPaymentDateAfter(
+            Long memberId, PaymentStatus status, LocalDateTime now);
+
+    List<Payment> findByMemberIdAndStatusAndNextPaymentDateIsNotNull(
+            Long memberId, PaymentStatus status);
+
     @Query("SELECT p FROM Payment p WHERE p.status = :status AND p.nextPaymentDate <= :now")
     List<Payment> findPaymentsDueForRenewal(
             @Param("status") PaymentStatus status,

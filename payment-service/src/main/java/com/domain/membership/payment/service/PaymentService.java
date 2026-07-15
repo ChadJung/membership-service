@@ -16,7 +16,11 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -31,20 +35,40 @@ public class PaymentService {
 
     @Transactional
     public PaymentResponse processPayment(PaymentRequest request) {
+        // Idempotent retry: a replayed request returns the original payment
+        // without charging again.
+        if (request.idempotencyKey() != null) {
+            Optional<Payment> replayed = paymentRepository.findByIdempotencyKey(request.idempotencyKey());
+            if (replayed.isPresent()) {
+                log.info("멱등성 키 재요청, 기존 결제 반환: idempotencyKey={}", request.idempotencyKey());
+                return PaymentResponse.from(replayed.get());
+            }
+        }
+
         // Live authorization against member-service; the fee comes from the
         // grade enum, never from the client request.
         MemberSnapshot member = memberClient.getActiveMember(request.userId());
+
+        // One charge per billing cycle: reject while a completed payment still
+        // covers the current period.
+        if (paymentRepository.existsByMemberIdAndStatusAndNextPaymentDateAfter(
+                member.memberId(), PaymentStatus.COMPLETED, LocalDateTime.now())) {
+            throw new BusinessException(ErrorCode.PAYMENT_ALREADY_PAID);
+        }
 
         Payment payment = Payment.builder()
                 .memberId(member.memberId())
                 .amount(member.grade().getMonthlyFee())
                 .paymentMethod(request.paymentMethod())
+                .nextPaymentDate(nextBillingDate(member.expiredAt()))
+                .idempotencyKey(request.idempotencyKey())
                 .build();
 
         try {
             String transactionId = UUID.randomUUID().toString();
             payment.complete(transactionId);
             paymentRepository.save(payment);
+            deschedulePrevious(member.memberId(), payment.getId());
 
             // member-service consumes this event and renews the membership.
             eventPublisher.publishEvent(PaymentEvent.completed(
@@ -74,11 +98,18 @@ public class PaymentService {
     @Transactional
     public void processScheduledRenewals() {
         List<Payment> duePayments = paymentRepository.findPaymentsDueForRenewal(
-                PaymentStatus.COMPLETED, java.time.LocalDateTime.now());
+                PaymentStatus.COMPLETED, LocalDateTime.now());
 
         log.info("정기결제 대상: {}건", duePayments.size());
 
+        Set<Long> renewedMemberIds = new HashSet<>();
         for (Payment lastPayment : duePayments) {
+            // Legacy rows may leave several due payments per member; bill once
+            // and absorb the duplicates so they never re-qualify.
+            if (renewedMemberIds.contains(lastPayment.getMemberId())) {
+                lastPayment.deschedule();
+                continue;
+            }
             try {
                 MemberSnapshot member = memberClient.getMemberById(lastPayment.getMemberId());
 
@@ -86,11 +117,14 @@ public class PaymentService {
                         .memberId(member.memberId())
                         .amount(member.grade().getMonthlyFee())
                         .paymentMethod(lastPayment.getPaymentMethod())
+                        .nextPaymentDate(nextBillingDate(member.expiredAt()))
                         .build();
 
                 String transactionId = UUID.randomUUID().toString();
                 renewal.complete(transactionId);
                 paymentRepository.save(renewal);
+                deschedulePrevious(member.memberId(), renewal.getId());
+                renewedMemberIds.add(member.memberId());
 
                 eventPublisher.publishEvent(PaymentEvent.completed(
                         renewal.getId(), member.memberId(), member.userId(), renewal.getAmount()));
@@ -99,5 +133,20 @@ public class PaymentService {
                 log.error("정기결제 갱신 실패: memberId={}", lastPayment.getMemberId(), e);
             }
         }
+    }
+
+    // Mirrors Member.renew(): the next cycle starts where the current coverage
+    // ends, so paying early never shortens the paid period.
+    private LocalDateTime nextBillingDate(LocalDateTime expiredAt) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime base = (expiredAt != null && expiredAt.isAfter(now)) ? expiredAt : now;
+        return base.plusMonths(1);
+    }
+
+    private void deschedulePrevious(Long memberId, Long newPaymentId) {
+        paymentRepository.findByMemberIdAndStatusAndNextPaymentDateIsNotNull(memberId, PaymentStatus.COMPLETED)
+                .stream()
+                .filter(p -> !p.getId().equals(newPaymentId))
+                .forEach(Payment::deschedule);
     }
 }

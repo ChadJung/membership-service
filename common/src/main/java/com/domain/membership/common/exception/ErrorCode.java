@@ -15,6 +15,7 @@ public enum ErrorCode {
     // Payment
     PAYMENT_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "PAYMENT_001", "결제 처리에 실패했습니다."),
     PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "PAYMENT_002", "결제 정보를 찾을 수 없습니다."),
+    PAYMENT_ALREADY_PAID(HttpStatus.CONFLICT, "PAYMENT_003", "이번 결제 주기에 이미 완료된 결제가 있습니다."),
 
     // Benefit
     BENEFIT_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "BENEFIT_001", "사용 가능한 혜택이 없습니다."),

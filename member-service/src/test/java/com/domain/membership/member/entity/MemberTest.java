@@ -62,6 +62,20 @@ class MemberTest {
     }
 
     @Test
+    @DisplayName("만료 전 갱신 시 남은 기간을 잃지 않고 기존 만료일에서 연장")
+    void renew_extends_from_current_expiry() {
+        Member member = Member.builder()
+                .userId(1L)
+                .grade(MembershipGrade.BASIC)
+                .build();
+        java.time.LocalDateTime before = member.getExpiredAt();
+
+        member.renew();
+
+        assertThat(member.getExpiredAt()).isEqualTo(before.plusMonths(1));
+    }
+
+    @Test
     @DisplayName("멤버십 갱신 시 상태와 만료일 갱신")
     void renew_membership() {
         Member member = Member.builder()

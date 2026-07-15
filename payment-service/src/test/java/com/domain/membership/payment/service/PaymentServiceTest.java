@@ -22,6 +22,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -64,7 +65,7 @@ class PaymentServiceTest {
         given(paymentRepository.save(any(Payment.class))).willAnswer(inv -> inv.getArgument(0));
 
         // when
-        PaymentResponse response = paymentService.processPayment(new PaymentRequest(1001L, "CARD"));
+        PaymentResponse response = paymentService.processPayment(new PaymentRequest(1001L, "CARD", null));
 
         // then
         assertThat(response.status()).isEqualTo(PaymentStatus.COMPLETED);
@@ -82,7 +83,7 @@ class PaymentServiceTest {
                 .willThrow(new BusinessException(ErrorCode.MEMBERSHIP_NOT_FOUND));
 
         // when & then
-        assertThatThrownBy(() -> paymentService.processPayment(new PaymentRequest(1001L, "CARD")))
+        assertThatThrownBy(() -> paymentService.processPayment(new PaymentRequest(1001L, "CARD", null)))
                 .isInstanceOf(BusinessException.class);
         verify(paymentRepository, never()).save(any());
     }
@@ -98,9 +99,46 @@ class PaymentServiceTest {
                 .willAnswer(inv -> inv.getArgument(0));
 
         // when & then
-        assertThatThrownBy(() -> paymentService.processPayment(new PaymentRequest(1001L, "CARD")))
+        assertThatThrownBy(() -> paymentService.processPayment(new PaymentRequest(1001L, "CARD", null)))
                 .isInstanceOf(BusinessException.class);
         verify(paymentRepository, times(2)).save(any(Payment.class)); // 결제 시도 + 실패 저장
+    }
+
+    @Test
+    @DisplayName("현재 결제 주기에 완료된 결제가 있으면 중복 결제 거부")
+    void processPayment_alreadyPaidThisCycle() {
+        // given
+        given(memberClient.getActiveMember(1001L))
+                .willReturn(snapshot(1L, 1001L, MembershipGrade.BASIC));
+        given(paymentRepository.existsByMemberIdAndStatusAndNextPaymentDateAfter(
+                eq(1L), eq(PaymentStatus.COMPLETED), any(LocalDateTime.class)))
+                .willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> paymentService.processPayment(new PaymentRequest(1001L, "CARD", null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.PAYMENT_ALREADY_PAID);
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("동일 멱등성 키 재요청 시 기존 결제를 반환하고 재과금하지 않음")
+    void processPayment_idempotentReplay() {
+        // given
+        Payment existing = Payment.builder()
+                .memberId(1L).amount(2990).paymentMethod("CARD")
+                .idempotencyKey("key-123").build();
+        existing.complete("tx-1");
+        given(paymentRepository.findByIdempotencyKey("key-123")).willReturn(Optional.of(existing));
+
+        // when
+        PaymentResponse response = paymentService.processPayment(
+                new PaymentRequest(1001L, "CARD", "key-123"));
+
+        // then
+        assertThat(response.transactionId()).isEqualTo("tx-1");
+        verify(paymentRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

@@ -34,6 +34,11 @@ public class Payment {
     @Column(unique = true, length = 100)
     private String transactionId;
 
+    // Client-supplied key for idempotent retries; unique so a replayed request
+    // can only ever map to one payment row.
+    @Column(unique = true, length = 100)
+    private String idempotencyKey;
+
     @Column(nullable = false)
     private LocalDateTime paymentDate;
 
@@ -43,13 +48,15 @@ public class Payment {
     private LocalDateTime createdAt;
 
     @Builder
-    public Payment(Long memberId, int amount, String paymentMethod) {
+    public Payment(Long memberId, int amount, String paymentMethod,
+                   LocalDateTime nextPaymentDate, String idempotencyKey) {
         this.memberId = memberId;
         this.amount = amount;
         this.paymentMethod = paymentMethod;
         this.status = PaymentStatus.PENDING;
         this.paymentDate = LocalDateTime.now();
-        this.nextPaymentDate = LocalDateTime.now().plusMonths(1);
+        this.nextPaymentDate = nextPaymentDate != null ? nextPaymentDate : LocalDateTime.now().plusMonths(1);
+        this.idempotencyKey = idempotencyKey;
         this.createdAt = LocalDateTime.now();
     }
 
@@ -60,6 +67,12 @@ public class Payment {
 
     public void fail() {
         this.status = PaymentStatus.FAILED;
+    }
+
+    // Only the latest payment of a member may carry a nextPaymentDate;
+    // clearing it keeps superseded rows out of the renewal query forever.
+    public void deschedule() {
+        this.nextPaymentDate = null;
     }
 
     public void refund() {

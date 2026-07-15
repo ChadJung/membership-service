@@ -65,10 +65,15 @@ public class Member {
     }
 
     public void renew() {
+        // Extend from the current expiry so paying early never loses the
+        // remaining days; fall back to now once the membership has lapsed.
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime base = (this.expiredAt != null && this.expiredAt.isAfter(now))
+                ? this.expiredAt : now;
         this.status = MembershipStatus.ACTIVE;
-        this.expiredAt = LocalDateTime.now().plusMonths(1);
+        this.expiredAt = base.plusMonths(1);
         this.cancelledAt = null;
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = now;
     }
 
     public boolean isExpired() {
