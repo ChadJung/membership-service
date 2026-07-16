@@ -36,7 +36,7 @@ docker-compose up -d --build
 
 **Gradle multi-module MSA** (Java 17, Spring Boot 3.2, Kotlin DSL):
 
-- `common/` — shared contracts only: `ApiResponse`, `ErrorCode`/`BusinessException`/`GlobalExceptionHandler`, `MembershipGrade`/`MembershipStatus` enums, Kafka event records (`MembershipEvent`, `PaymentEvent`), `MemberSnapshot` (internal API DTO). No entities, no Spring Boot app.
+- `common/` — shared contracts only: `ApiResponse`, `ErrorCode`/`BusinessException`/`GlobalExceptionHandler`, `MembershipGrade`/`MembershipStatus` enums, Kafka event records (`MembershipEvent`, `PaymentEvent`), `MemberSnapshot` (internal API DTO), `SeedDataSpec` (deterministic seed profile shared by member/payment seeds). No entities, no Spring Boot app.
 - `member-service/` (8081, member_db) — owns member state. Public API `/api/v1/memberships/**`, internal API `/internal/members/{userId}`, `/{userId}/active`, `/by-id/{memberId}`. Publishes `membership-events`; consumes `payment-events` (COMPLETED → `member.renew()`), which is the ONLY path that extends expiredAt.
 - `payment-service/` (8082, payment_db) — payments + renewal scheduler (cron `0 0 6 * * *`). Validates members via live REST (`MemberClient`, never cached — billing must not trust stale ACTIVE). Publishes `payment-events`. Fee always from `MembershipGrade.getMonthlyFee()` (BASIC 2990 / PREMIUM 7900), never from the request.
 - `benefit-service/` (8083, benefit_db, Redis) — benefits by grade. `MemberClient` caches member snapshots in Redis (`members::{userId}`, 60s TTL) and `MembershipEventConsumer` evicts on subscribe/cancel events. `BenefitReader` caches benefit lists per grade (30m TTL). RedisConfig uses a JavaTimeModule-aware ObjectMapper (cached DTOs carry LocalDateTime) and caches must round-trip through `GenericJackson2JsonRedisSerializer` — return `ArrayList`, never `Stream.toList()` results, and don't cache empty lists.
@@ -50,7 +50,7 @@ Spring `ApplicationEventPublisher` in-process, then per-service `KafkaEventPubli
 
 ### Sample Data
 
-Each service seeds when its table is empty: members userId 1001-1010 (odd BASIC / even PREMIUM, 1009-1010 cancelled), payments for memberId 1-8, five benefits. payment-service's seed assumes member ids 1-10 from a fresh member_db.
+Each service seeds when its table is empty (idempotent, skipped once rows exist). Bulk seed is driven by `common`'s `SeedDataSpec`: 1,000 members (userId 1001-2000, memberId = userId - 1000 via identity insert order — valid only when member_db and payment_db start empty together), ~12,000 payments rebuilt as monthly charge chains, 12 benefits. userId 1001-1010 keeps the legacy demo pattern (odd BASIC / even PREMIUM, 1009-1010 cancelled). Member/payment seeds insert via JdbcTemplate (entity builders pin timestamps to now(), seeds need historical dates) and preserve the deschedule invariant: only an ACTIVE member's latest payment carries `next_payment_date` (= the member's `expired_at`, spread over the next month so the 06:00 scheduler renews a few dozen per day instead of bursting). To re-seed a prod stack, wipe the volumes (`docker-compose down -v`).
 
 ### Domain Model Conventions
 
